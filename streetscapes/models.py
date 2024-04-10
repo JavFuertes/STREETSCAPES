@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -53,7 +54,7 @@ class ResNet152(nn.Module):
         return features
 
 class VAE(nn.Module):
-    def __init__(self, input_dim: int, latent_dim: int, hidden_dim: int, hidden_num: int, beta: float =0.001):
+    def __init__(self, input_dim: int, latent_dim: int, hidden_dim: int, hidden_num: int, beta: float =0.001, save_model: bool = False):
         """
         Initializes the layers that make up the two halves of the autoencoder.
 
@@ -68,13 +69,19 @@ class VAE(nn.Module):
         'self.encoder': The encoder model, ready to be called
         'self.decoder': The decoder model, ready to be called
         """
-
         super(VAE, self).__init__()
-        
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         self.beta = beta
         self.latent_dim = latent_dim
+
+        if save_model:
+            model_path = os.path.join(
+                os.getcwd(), "_data\\models\\vae", f"lat-{latent_dim}"
+            )
+            os.makedirs(model_path, exist_ok=True)
+            self.save_model = True
+            self.model_path = model_path
 
         # Encoder
         self.encoder = nn.Sequential(
@@ -203,8 +210,7 @@ class VAE(nn.Module):
             "kld": kld_loss.detach(),
         }
 
-    @staticmethod
-    def train_one_epoch(model, loader: object, optimizer: object):  
+    def train_one_epoch(self, loader: object, optimizer: object):  
         """
         Trains the model for one epoch using the given data loader and optimizer.
 
@@ -217,7 +223,7 @@ class VAE(nn.Module):
             float: The average loss per batch for the epoch.
         """
 
-        model.train()
+        self.train()
         running_loss = 0.0
         last_loss = 0.0
         n_batch = loader.batch_size
@@ -227,13 +233,13 @@ class VAE(nn.Module):
 
         for i, [data, _] in enumerate(loader):
             
-            x = data.to(model.device)  # Ensure data is on the correct device
+            x = data.to(self.device)  # Ensure data is on the correct device
             
             optimizer.zero_grad()
 
-            xtilde, mu, log_var = model(x)
+            xtilde, mu, log_var = self(x)
 
-            output = model.loss_function(x, xtilde, mu, log_var)
+            output = self.loss_function(x, xtilde, mu, log_var)
             loss = output["loss"]
             loss.backward()
 
@@ -251,25 +257,41 @@ class VAE(nn.Module):
 
         return last_loss
 
-    @staticmethod
-    def tain(model,optimizer,loader,epochs):
+    def train_(self, optimizer: object, loader: object, epochs: int, patience: int, wait: int):
+        """
+        Train the model using the given optimizer and data loader for a specified number of epochs.
 
+        ## Args:
+            optimizer (object): The optimizer used for training.
+            loader (object): The data loader used for training and validation.
+            epochs (int): The number of epochs to train the model.
+            patience (int): The number of epochs to wait for improvement in validation loss before early stopping.
+            wait (int): The current number of epochs without improvement in validation loss.
+
+        ## Returns:
+            None
+        """
+        train_loss = []
+        val_loss = []
+        
         epoch_number = 0
+        best_vloss = 0.8
 
         for epoch in range(epochs):
             print("--------------------------------------------")
             print("EPOCH {}:".format(epoch_number + 1))
 
-            model.train(True)
-            avg_loss = model.train_one_epoch(model,loader[0],optimizer)
+            self.train(True)
+            avg_loss = self.train_one_epoch(loader[0],optimizer)
 
             running_vloss = 0.0
-            model.eval()
+            self.eval()
 
             with torch.no_grad():
                 for i, [x, _] in enumerate(loader[1]):
-                    xtilde, mu, log_var = model(x)
-                    vloss = model.loss_function(x, xtilde, mu, log_var)["loss"]
+                    x = x.to(self.device)
+                    xtilde, mu, log_var = self(x)
+                    vloss = self.loss_function(x, xtilde, mu, log_var)["loss"]
                     running_vloss += vloss
 
             avg_vloss = running_vloss / (i + 1)
@@ -281,8 +303,8 @@ class VAE(nn.Module):
             if avg_vloss < best_vloss:
                 best_vloss = avg_vloss
                 wait = 0  # Reset wait counter after improvement
-                if save_model:
-                    torch.save(model.state_dict(), os.path.join(model_path, "model_best.pt"))
+                if self.save_model:
+                    torch.save(self.state_dict(), os.path.join(self.model_path, "model_best.pt"))
             else:
                 wait += 1
                 if wait >= patience:
