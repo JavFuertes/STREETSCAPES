@@ -1,73 +1,24 @@
 import os
+
+import torch
+import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torchvision.transforms as transforms
-from torchvision import models 
-from torchsummary import summary
 from torch.nn import functional
-from torch.utils.data import random_split, DataLoader
-
+from tabulate import tabulate
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f'Using device: {device}')
-
-import torch
-import torch.nn as nn
-from torchvision import models
-
-class ResNet152(nn.Module):
-    """
-    ResNet152 model implementation.
-
-    This class defines the ResNet152 model architecture and initializes it with pretrained weights.
-    """
-
-    def __init__(self):
-        super(ResNet152, self).__init__()
-        self.model = models.resnet152(pretrained=True)
-
-    def forward(self, x):
-        return self.model(x)
-
-    def extract_features(self, dataloader: object, device: object) -> torch.Tensor:
-        """
-        Extracts features from the given dataloader using the model.
-
-        ## Args:
-            dataloader (torch.utils.data.DataLoader): The dataloader containing the input data.
-            device (torch.device): The device to perform the computation on.
-
-        ## Returns:
-            torch.Tensor: The extracted features as a tensor.
-        """
-        features = []
-        self.eval()  # Put the model in evaluation mode
-        with torch.no_grad():  # Ensure no gradients are computed to save memory and computations
-            for inputs in dataloader:
-                inputs = inputs.to(device)
-                outputs = self.model(inputs)
-                features.append(outputs)
-        features = torch.cat(features, dim=0)  # Concatenate tensors along dimension 0
-        return features
 
 class VAE(nn.Module):
     def __init__(self, input_dim: int, latent_dim: int, hidden_dim: int, hidden_num: int, beta: float =0.001, save_model: bool = False):
         """
-        Initializes the layers that make up the two halves of the autoencoder.
+        Variational Autoencoder (VAE) model.
 
-        ## Receives:
-        'input_dim': Data dimensionality in the original space (D)
-        'latent_dim': Dimensionality of the latent space z (M)
-        'hidden_dim': Number of units of each hidden layer
-        'hidden_num': Number of hidden layers of each half of the model
-        'beta': The (optional) weighing of the KL divergence loss term
-
-        ## Stores:
-        'self.encoder': The encoder model, ready to be called
-        'self.decoder': The decoder model, ready to be called
+        ## Args:
+            input_dim (int): Dimensionality of the input data.
+            latent_dim (int): Dimensionality of the latent space.
+            hidden_dim (int): Dimensionality of the hidden layers.
+            hidden_num (int): Number of hidden layers.
+            beta (float, optional): Beta parameter for the Kullback-Leibler divergence term in the loss function. Defaults to 0.001.
+            save_model (bool, optional): Whether to save the trained model. Defaults to False.
         """
         super(VAE, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -110,12 +61,12 @@ class VAE(nn.Module):
         """
         Encodes data from real space x to a Gaussian approximation q(z) of p(z|x)
 
-        ## Receives:
-        'x': a set of input features [B x D]
+        Args:
+            x (torch.Tensor): A set of input features [B x D]
 
-        ## Returns:
-        'mu': Vector with posterior means of q(z) [B x M]
-        'log_var': Vector with posterior covariances of q(z) [B x M]
+        Returns:
+            mu (torch.Tensor): Vector with posterior means of q(z) [B x M]
+            log_var (torch.Tensor): Vector with posterior covariances of q(z) [B x M]
         """
         result = self.encoder(x)
         mu = self.hidtomu(result)
@@ -126,15 +77,13 @@ class VAE(nn.Module):
         """
         Decodes data from latent space z to real space x
 
-        Receives:
-        'z': samples of q(z) of [B x M]
+        Args:
+            z: Samples of q(z) of [B x M]
 
         Returns:
-        'xtilde': decoded reconstructions (means of p(x|z)) [B x D]
+            result: Decoded reconstructions (means of p(x|z)) [B x D]
         """
-
         result = self.decoder(z)
-
         return result
 
     def reparameterize(self, mu, logvar):
@@ -143,67 +92,70 @@ class VAE(nn.Module):
         actually sampling N(0,I). The variance is exponentiated to learn a log-scaled
         version of it. This enforces non-negativity and ensures q(z) is a valid Gaussian.
 
-        Receives:
-        'mu': Mean of the latent Gaussian q(z) [B x M]
-        'logvar': Log of (diagonal) variance of the latent Gaussian q(z) [B x M]
+        Args:
+            mu (torch.Tensor): Mean of the latent Gaussian q(z) [B x M]
+            logvar (torch.Tensor): Log of (diagonal) variance of the latent Gaussian q(z) [B x M]
 
         Returns:
-        'z': one sample of q(z) for each minibatch point [B x M]
+            z (torch.Tensor): One sample of q(z) for each minibatch point [B x M]
         """
-
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         z = eps * std + mu
-        
         return z
 
     def forward(self, x):
         """
         Performs a complete forward pass through the autoencoder
 
-        Receives:
-        'x': A set of input features [B x D]
+        Args:
+            x (torch.Tensor): A set of input features [B x D]
 
         Returns:
-        'xtilde': A set of reconstructed inputs [B x D]
-        'mu': The means of the posteriors q(z) [B x M]
-        'log_var': The (naturally log-scaled) variances of the posteriors q(z) [B x M]
+            xtilde (torch.Tensor): A set of reconstructed inputs [B x D]
+            mu (torch.Tensor): The means of the posteriors q(z) [B x M]
+            log_var (torch.Tensor): The (naturally log-scaled) variances of the posteriors q(z) [B x M]
         """
-
         mu, log_var = self.encode(x)
         z = self.reparameterize(mu, log_var)
         xtilde = self.decode(z)
-       
         return xtilde, mu, log_var
 
     def encoparam(self, x):
         """
         Perform half a forward pass of the variational autoencoder to obtain an encoded latent space.
 
-        Parameters:
-        - x: Input data to be encoded.
+        Args:
+            x: Input data to be encoded.
 
         Returns:
-        - z: Encoded latent space representation.
+            z: Encoded latent space representation.
         """
         mu, log_var = self.encode(x)
         z = self.reparameterize(mu, log_var)
-
         return z
 
     def loss_function(self, x, xtilde, mu, log_var):
         """
         Computes the loss function of the VAE
-        """
 
+        Args:
+            x (torch.Tensor): The original input data [B x D]
+            xtilde (torch.Tensor): The reconstructed input data [B x D]
+            mu (torch.Tensor): The means of the posteriors q(z) [B x M]
+            log_var (torch.Tensor): The (naturally log-scaled) variances of the posteriors q(z) [B x M]
+
+        Returns:
+            dict: A dictionary containing the loss values
+                - loss (torch.Tensor): The total loss
+                - recon (torch.Tensor): The reconstruction loss
+                - kld (torch.Tensor): The Kullback-Leibler divergence loss
+        """
         reconstruction_loss = functional.mse_loss(xtilde, x)
-        
         kld_loss = torch.mean(
             -0.5 * torch.sum(1 + log_var - mu**2 - log_var.exp(), dim=1), dim=0
         )
-
         loss = reconstruction_loss + self.beta * kld_loss
-        
         return {
             "loss": loss,
             "recon": reconstruction_loss.detach(),
@@ -233,8 +185,7 @@ class VAE(nn.Module):
 
         for i, [data, _] in enumerate(loader):
             
-            x = data.to(self.device)  # Ensure data is on the correct device
-            
+            x = data.to(self.device)   
             optimizer.zero_grad()
 
             xtilde, mu, log_var = self(x)
@@ -244,15 +195,14 @@ class VAE(nn.Module):
             loss.backward()
 
             optimizer.step()
-
             running_loss += loss.item()
             if i % write_every == write_every - 1:
                 last_loss = running_loss / write_every  # loss per batch
-                print(
-                    f"loss: {last_loss:5f}, "
-                    f"reconstruction loss: {output['recon']:5f}, "
-                    f"kld loss: {output['kld']:5f}"
-                )
+                # print(
+                #     f"loss: {last_loss:5f}, "
+                #     f"reconstruction loss: {output['recon']:5f}, "
+                #     f"kld loss: {output['kld']:5f}"
+                # )
                 running_loss = 0.0
 
         return last_loss
@@ -275,11 +225,11 @@ class VAE(nn.Module):
         val_loss = []
         
         epoch_number = 0
-        best_vloss = 0.8
+        best_vloss = float('inf')
+        best_epoch = float('inf')
+        best_loss = None
 
         for epoch in range(epochs):
-            print("--------------------------------------------")
-            print("EPOCH {}:".format(epoch_number + 1))
 
             self.train(True)
             avg_loss = self.train_one_epoch(loader[0],optimizer)
@@ -295,7 +245,6 @@ class VAE(nn.Module):
                     running_vloss += vloss
 
             avg_vloss = running_vloss / (i + 1)
-            print(f"LOSS train {avg_loss:5f} LOSS valid {avg_vloss:5f}")
             train_loss.append(avg_loss)
             val_loss.append(avg_vloss)
 
@@ -303,6 +252,8 @@ class VAE(nn.Module):
             if avg_vloss < best_vloss:
                 best_vloss = avg_vloss
                 wait = 0  # Reset wait counter after improvement
+                best_loss = avg_loss
+                best_epoch = epoch
                 if self.save_model:
                     torch.save(self.state_dict(), os.path.join(self.model_path, "model_best.pt"))
             else:
@@ -312,23 +263,7 @@ class VAE(nn.Module):
                     break  # Stop training if wait exceeds patience
 
             epoch_number += 1
+            last_values = [epoch, avg_loss, float(avg_vloss), best_loss, best_epoch]
+            print(tabulate([last_values], headers=['Epoch', 'Train Loss', 'Val Loss', 'Best Loss', 'Best Epoch'], tablefmt='grid'))
 
-    @staticmethod
-    def plot_one_sample(model, loader):
-        model.eval()
-        idcs = np.random.permutation(loader.dataset.indices)[:1]
-        targets = loader.dataset.dataset[idcs].to(model.device)
-        recons = model.forward(targets)[0].detach().cpu().detach()
-
-        # create figure and plot reconstructions
-        fig, ax = plt.subplots(1, 2, figsize=(2 * 2.5, 2.5))
-
-        ax[0].imshow(targets[0].reshape(2048, 2048))
-        ax[1].imshow(recons[0].reshape(25, 25))
-
-        # adapt layout
-        [axs.set_axis_off() for axs in ax.flat]
-        ax[0].set_title("target")
-        ax[1].set_title("reconstruction")
-
-        plt.show()
+        return train_loss, val_loss
