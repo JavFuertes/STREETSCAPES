@@ -8,7 +8,7 @@ from tabulate import tabulate
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class VAE(nn.Module):
-    def __init__(self, input_dim: int, latent_dim: int, hidden_dim: int, hidden_num: int, beta: float =0.001, save_model: bool = False):
+    def __init__(self, input_dim: int, latent_dim: int, hidden_dim: int, hidden_num: int, beta = 1e4 ,save_model: bool = False, path: str = None):
         """
         Variational Autoencoder (VAE) model.
 
@@ -21,41 +21,33 @@ class VAE(nn.Module):
             save_model (bool, optional): Whether to save the trained model. Defaults to False.
         """
         super(VAE, self).__init__()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
         self.beta = beta
-        self.latent_dim = latent_dim
-
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if save_model:
             model_path = os.path.join(
-                os.getcwd(), "_data\\models\\vae", f"lat-{latent_dim}"
+                os.getcwd(), path, f"lat-{latent_dim}"
             )
             os.makedirs(model_path, exist_ok=True)
             self.save_model = True
             self.model_path = model_path
 
-        # Encoder
-        self.encoder = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.SELU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SELU()
-        ).to(self.device)
+        self.latent_dim = latent_dim
+        
+        # Build the encoder
+        modules = []
+        modules.append(nn.Linear(input_dim, 128))
+        modules.append(nn.ReLU())
+        modules.append(nn.Linear(128, hidden_dim))
+        modules.append(nn.ReLU())
+        for _ in range(hidden_num - 3):
+            modules.append(nn.Linear(hidden_dim, hidden_dim))
+            modules.append(nn.ReLU())
+        modules.append(nn.Linear(hidden_dim, 128))
+        modules.append(nn.ReLU())
+        self.encoder = nn.Sequential(*modules).to(self.device)
 
-        self.hidtomu = nn.Linear(hidden_dim, latent_dim).to(self.device)
-        self.hidtovar = nn.Linear(hidden_dim, latent_dim).to(self.device)
-
-        # Decoder
-        decoder = [
-            nn.Linear(latent_dim, hidden_dim),
-            nn.SELU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SELU()
-        ]
-
-        decoder.append(nn.Linear(hidden_dim, input_dim))
-        decoder.append(nn.Sigmoid())
-        self.decoder = nn.Sequential(*decoder).to(self.device)
+        self.hidtomu = nn.Linear(128, latent_dim).to(self.device)
+        self.hidtovar = nn.Linear(128, latent_dim).to(self.device)
 
     def encode(self, x: torch.Tensor): 
         """
@@ -72,19 +64,6 @@ class VAE(nn.Module):
         mu = self.hidtomu(result)
         log_var = self.hidtovar(result)
         return mu, log_var
-
-    def decode(self, z):
-        """
-        Decodes data from latent space z to real space x
-
-        Args:
-            z: Samples of q(z) of [B x M]
-
-        Returns:
-            result: Decoded reconstructions (means of p(x|z)) [B x D]
-        """
-        result = self.decoder(z)
-        return result
 
     def reparameterize(self, mu, logvar):
         """
@@ -118,24 +97,9 @@ class VAE(nn.Module):
         """
         mu, log_var = self.encode(x)
         z = self.reparameterize(mu, log_var)
-        xtilde = self.decode(z)
-        return xtilde, mu, log_var
+        return z, mu, log_var
 
-    def encoparam(self, x):
-        """
-        Perform half a forward pass of the variational autoencoder to obtain an encoded latent space.
-
-        Args:
-            x: Input data to be encoded.
-
-        Returns:
-            z: Encoded latent space representation.
-        """
-        mu, log_var = self.encode(x)
-        z = self.reparameterize(mu, log_var)
-        return z
-
-    def loss_function(self, x, xtilde, mu, log_var):
+    def loss_function(self, mu, log_var):
         """
         Computes the loss function of the VAE
 
@@ -151,15 +115,11 @@ class VAE(nn.Module):
                 - recon (torch.Tensor): The reconstruction loss
                 - kld (torch.Tensor): The Kullback-Leibler divergence loss
         """
-        reconstruction_loss = functional.mse_loss(xtilde, x)
-        kld_loss = torch.mean(
+        loss = torch.mean(
             -0.5 * torch.sum(1 + log_var - mu**2 - log_var.exp(), dim=1), dim=0
-        )
-        loss = reconstruction_loss + self.beta * kld_loss
+        ) * self.beta
         return {
             "loss": loss,
-            "recon": reconstruction_loss.detach(),
-            "kld": kld_loss.detach(),
         }
 
     def train_one_epoch(self, loader: object, optimizer: object):  
@@ -188,9 +148,9 @@ class VAE(nn.Module):
             x = data.to(self.device)   
             optimizer.zero_grad()
 
-            xtilde, mu, log_var = self(x)
+            _, mu, log_var = self(x)
 
-            output = self.loss_function(x, xtilde, mu, log_var)
+            output = self.loss_function(mu, log_var)
             loss = output["loss"]
             loss.backward()
 
@@ -198,11 +158,6 @@ class VAE(nn.Module):
             running_loss += loss.item()
             if i % write_every == write_every - 1:
                 last_loss = running_loss / write_every  # loss per batch
-                # print(
-                #     f"loss: {last_loss:5f}, "
-                #     f"reconstruction loss: {output['recon']:5f}, "
-                #     f"kld loss: {output['kld']:5f}"
-                # )
                 running_loss = 0.0
 
         return last_loss
@@ -240,18 +195,18 @@ class VAE(nn.Module):
             with torch.no_grad():
                 for i, [x, _] in enumerate(loader[1]):
                     x = x.to(self.device)
-                    xtilde, mu, log_var = self(x)
-                    vloss = self.loss_function(x, xtilde, mu, log_var)["loss"]
+                    _, mu, log_var = self(x)
+                    vloss = self.loss_function(mu, log_var)["loss"]
                     running_vloss += vloss
 
             avg_vloss = running_vloss / (i + 1)
             train_loss.append(avg_loss)
             val_loss.append(avg_vloss)
-
             # Track best validation performance with early stopping, optionally save the model with lowest loss
             if avg_vloss < best_vloss:
-                best_vloss = avg_vloss
                 wait = 0  # Reset wait counter after improvement
+                
+                best_vloss = avg_vloss
                 best_loss = avg_loss
                 best_epoch = epoch
                 if self.save_model:

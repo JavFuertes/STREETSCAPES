@@ -1,3 +1,3 @@
-from .cnn import cnn
-from .gaussian_mixture import GaussianMixture
+from .cnn import CNN
+from .gaussian_mixture import GM
 from .vae import VAE

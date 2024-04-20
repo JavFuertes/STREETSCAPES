@@ -1,6 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px 
+from plotly.subplots import make_subplots
 
 # ------------------------------ Monitoring VAE ------------------------------ #
 def training_losses(vloss, tloss):
@@ -41,80 +41,27 @@ def lf_space(features, latd):
     )
     return fig.show()
 
-# ------------------------- Monitor Gaussian Mixture ------------------------- #
-def gmc_space(features, latd, gmm):
-    """
-    Visualizes the Gaussian Mixture Model clusters in 3D with simplified boundaries.
+# ------------------------ Monitoring Gaussian Mixture ----------------------- #
+def gm_elbo(aic_values: list, bic_values: list, log_likelihood_values: list):
+    k_values = list(range(1, len(aic_values) + 1))
     
-    Args:
-    - features (torch.Tensor): The latent features from the VAE.
-    - latd (list of int): The indices of the dimensions to plot.
-    - gmm (GaussianMixture): The fitted Gaussian Mixture Model.
-    """
-    
-    z_cpu = features
-    cluster_labels = gmm.predict(z_cpu)
-    
-    # Define colors for each cluster
-    colors = px.colors.qualitative.Plotly
+    trace_aic = go.Scatter(x=k_values, y=aic_values, mode='lines+markers', name='AIC')
+    trace_bic = go.Scatter(x=k_values, y=bic_values, mode='lines+markers', name='BIC')
+    trace_log_likelihood = go.Scatter(x=k_values, y=log_likelihood_values, mode='lines+markers', name='Log Likelihood')
 
-    fig = go.Figure()
+    fig = make_subplots(rows=1, cols=2, subplot_titles=('AIC & BIC Scores per K', 'Log Likelihood per K'))
 
-    # Plot data points with colors based on cluster membership
-    for i in range(gmm.n_components):
-        cluster_data = z_cpu[cluster_labels == i]
-        fig.add_trace(go.Scatter3d(
-            x=cluster_data[:, latd[0]],
-            y=cluster_data[:, latd[1]],
-            z=cluster_data[:, latd[2]],
-            mode='markers',
-            marker=dict(size=3, color=colors[i % len(colors)]),
-            name=f'Cluster {i+1}'
-        ))
+    fig.add_trace(trace_aic, row=1, col=1)
+    fig.add_trace(trace_bic, row=1, col=1)
+    fig.add_trace(trace_log_likelihood, row=1, col=2)
 
-    # Add spheres to indicate cluster centers (simplified boundary visualization)
-    for mean, color in zip(gmm.means_, colors[:gmm.n_components]):
-        sphere = create_sphere(mean[latd[0]], mean[latd[1]], mean[latd[2]], radius=0.5, color=color)
-        fig.add_trace(sphere)
-    
-    # Update plot layout
-    fig.update_layout(
-        title_text="GMM Clusters in Latent Space",
-        scene=dict(
-            xaxis_title=f'Dimension {latd[0]}',
-            yaxis_title=f'Dimension {latd[1]}',
-            zaxis_title=f'Dimension {latd[2]}'
-        ),
-        template='plotly_dark'
-    )
-    
-    return fig.show()
+    fig.update_xaxes(title_text='Number of clusters (K)', row=1, col=1)
+    fig.update_xaxes(title_text='Number of clusters (K)', row=1, col=2)
+    fig.update_yaxes(title_text='Score', row=1, col=1)
+    fig.update_yaxes(title_text='Log Likelihood', row=1, col=2)
 
-def create_sphere(x_center, y_center, z_center, radius, color):
-    """
-    Generates a sphere surface centered at (x_center, y_center, z_center).
-    
-    Args:
-    - x_center, y_center, z_center (float): Center of the sphere.
-    - radius (float): Radius of the sphere.
-    - color (str): Color of the sphere.
-    
-    Returns:
-    - A Plotly figure object representing the sphere.
-    """
-    phi = np.linspace(0, 2*np.pi, 20)
-    theta = np.linspace(0, np.pi, 20)
-    phi, theta = np.meshgrid(phi, theta)
-    
-    x = radius * np.sin(theta) * np.cos(phi) + x_center
-    y = radius * np.sin(theta) * np.sin(phi) + y_center
-    z = radius * np.cos(theta) + z_center
-    
-    return go.Mesh3d(
-        x=x.flatten(),
-        y=y.flatten(),
-        z=z.flatten(),
-        alphahull=0,
-        opacity=0.2,
-        color=color
-    )
+    fig.update_layout(height=600, width=1200, title_text='GMM Model Criteria per Number of Clusters', showlegend=True)
+
+    fig.show()
+
+

@@ -34,7 +34,7 @@ for i in range(n_images):
             dataset.append(image_tensor.to(device))
             labels.append(filename)
 
-## Part 1: Image feature extraction through CNN
+## PART 1: Image feature extraction through CNN
 # Instantiate model and extract features
 STREETSCAPES01 = CNN()
 dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
@@ -46,9 +46,16 @@ file_name = 'DelftSV_imgfeatuers.h5'
 path = os.path.join(dir,file_name )
 processing.features(dataset, path, mode = 'save')
 
-## Part 2: Image feature dimensionality reduction through VAE
+## PART 2: Image feature dimensionality reduction through VAE
 # Prepare dataset for NN
 dset = list(zip(features, labels))
+
+batch_size = 50
+test_rat = 0.8
+validation_rat = 0.7
+torch.manual_seed(0) # Set rng for reproducability
+g = torch.Generator()
+g.manual_seed(0)
 
 data_test, data_train = random_split(
     dset, [test_rat, 1 - test_rat], generator=g
@@ -68,16 +75,7 @@ validation_loader = DataLoader(
 )
 
 # Define VAE model
-torch.manual_seed(0) # Set rng for reproducability
-g = torch.Generator()
-g.manual_seed(0)
 
-# Set params for dataset handling
-batch_size = 50
-test_rat = 0.8
-validation_rat = 0.7
-
-# Model parameters
 latent_dim = 3
 
 kld_weight = 5e-04
@@ -104,9 +102,19 @@ model = VAE(
 # Train the model
 optimizer = torch.optim.Adam(model.parameters())
 loaders = [training_loader, validation_loader]
-
 tloss, vloss = model.train_(optimizer,loaders,epochs,patience,wait)
 
+# Process the features
+img_zfeat = []
+labels = []
+for [data,label] in test_loader:
+    x = data.to(model.device)  # Ensure data is on the correct device
+    z = model.encoparam(x)
+    img_zfeat.append(z)
+    labels.append(label)
+encoded_feat = torch.cat(img_zfeat)
+
+# Monitor the training if neccessary
 monitor_VAE = False
 if monitor_VAE:
     from streetscapes.processing.utils import monitor_training, lf_space
@@ -114,8 +122,11 @@ if monitor_VAE:
     lf_space(features, [0,1,2])
 
 
+## PART 3: Classification through gaussian mixture
 
-
+K = 25  #Number of clusters
+gmm = GaussianMixture(n_components=K, covariance_type='full', random_state=0)
+gmm.fit(data)
 
 monitor_GM = False
 if monitor_GM:
