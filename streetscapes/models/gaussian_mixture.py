@@ -20,35 +20,6 @@ class GM:
         self.gmm = None
         self.K = None
 
-    def means_(self):
-        return self.gmm.means_
-
-    def covariances_(self):
-        return self.gmm.covariances_
-
-    def weights_(self):
-        return self.gmm.weights_
-
-    def aic(self, X):
-        return self.gmm.aic(X)
-
-    def bic(self, X):
-        return self.gmm.bic(X)
-
-    def score(self, X: torch.tensor):
-        """
-        Computes the log-likelihood of the fitted GMM model.
-
-        ## Parameters:
-        - X: array-like, shape (n_samples, n_features)
-            The input data.
-
-        ## Returns:
-        - loglikelihood: float
-            The log-likelihood of the fitted GMM model.
-        """
-        return self.gmm.score(X) * len(X)  # gmm.score returns average log likelihood per sample
-
     def avg_gradient_change(self, values, current_index, window_size):
         gradients = [(values[i] - values[i-1]) / abs(values[i-1]) if values[i-1] != 0 else 0
                     for i in range(current_index - window_size + 1, current_index + 1)]
@@ -139,8 +110,6 @@ class GM:
         - samples: array-like, shape (n_samples, n_features)
             The generated samples.
         """
-        if self.gmm is None:
-            raise ValueError("GMM has not been fitted yet. Please call the fit method first.")
         return self.gmm.sample(n_samples)
 
     def predict(self, X: torch.tensor):
@@ -155,7 +124,7 @@ class GM:
         - z_nk: array-like, shape (n_samples, K)
             The posterior probabilities of each sample belonging to each component.
         """
-        return self.gmm.predict_proba(X)
+        return self.gmm.predict_proba(X)    
     
     
 
