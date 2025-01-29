@@ -3,10 +3,12 @@
 
 import os
 
+import numpy as np
 import torch
 import torch.nn as nn
 from tabulate import tabulate
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+import plotly.graph_objects as go
 
 class VAE(nn.Module):
     def __init__(self, input_dim: int, latent_dim: int, hidden_dim: int, hidden_num: int, beta = 1e4 ,save_model: bool = False, path: str = None):

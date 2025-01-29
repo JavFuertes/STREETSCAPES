@@ -1,5 +1,5 @@
-from .gaussian_mixture import *
-from .k_means import *
+from .gm import *
+from .km import *
 from .pca import *
 from .vae import *
 from .vit import *

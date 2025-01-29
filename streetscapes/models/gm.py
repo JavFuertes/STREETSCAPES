@@ -1,6 +1,12 @@
+import numpy as np
 import torch
+from sklearn.cluster import KMeans
+from scipy.spatial.distance import cdist
 from scipy.stats import chi2
 from sklearn.mixture import GaussianMixture
+
+import plotly.graph_objects as go
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class GM:
@@ -130,7 +136,3 @@ class GM:
             The posterior probabilities of each sample belonging to each component.
         """
         return self.gmm.predict_proba(X)
-    
-    
-
-    
