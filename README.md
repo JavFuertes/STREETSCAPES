@@ -3,7 +3,7 @@
 Streets are classified based on their role in vehicle movement (Su et al., 2022), considering factors like lane number and width, vehicle speed, and type. However, this approach often overlooks the street's context and its function as a social space. Alternative classification methods that integrate both "movement" and "place" aspects are needed. With advancements in deep learning and access to millions of street view images, there is potential to enhance street classification. Images provide richer information than numerical databases, and deep learning models can analyze them more quickly than field observations. 
 
 > <span style="font-size: larger;"><B>Project Objective:</B></span> To classify street typologies in Delft<br>
-> The primary objective of this project is to create a deep learning model that can automatically classify street features by analyzing computer vision embeddings. It aims to be solved via unsupervised and transfer learning to remove the reliance on labeled data and thus make it transferable to different locations.
+> The primary objective of this project is to create a deep learning model that can automatically classify street typologies by analyzing computer vision embeddings. This aims to be solved via unsupervised and transfer learning, this approach allows to not rely on labeled data. Making the model simpler and transferable.
  
 | ![Google Streetview example image](./_data/src/image_10872_f.png) | ![Demo Classification results](./_data/processed/batch_demo.png)|
 |-------------------------------------------------------------------|------------------------------------------------------------------|
