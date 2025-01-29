@@ -5,9 +5,9 @@ Streets are classified based on their role in vehicle movement (Su et al., 2022)
 > <span style="font-size: larger;"><B>Project Objective:</B></span> To classify street typologies in Delft<br>
 > The primary objective of this project is to create a deep learning model that can automatically classify street features by analyzing computer vision embeddings. It aims to be solved via unsupervised and transfer learning to remove the reliance on labeled data and thus make it transferable to different locations.
  
-| ![Google Streetview exmaple image](_data\src\image_10872_f.png) | ![Final Classification results](_data\processed\batch_demo.png) |
-|--------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| **Figure 1:** Building damage due to subsidence effects                  | **Figure 2:** Building damage due to subsidence effects               |
+| ![Google Streetview example image](./_data/src/image_10872_f.png) | ![Demo Classification results](./_data/processed/batch_demo.png)|
+|-------------------------------------------------------------------|------------------------------------------------------------------|
+| **Figure 1:** Building damage due to subsidence effects           | **Figure 2:** Building damage due to subsidence effects          |
 
 ## 📊 Results
 
