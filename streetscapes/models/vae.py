@@ -1,9 +1,10 @@
+## This Script would like to give credit to the DSAI team at the TUDelft CEG faculty. 
+## This encoder was taken and modified from the material produced by the teaching team.
+
 import os
 
 import torch
 import torch.nn as nn
-import numpy as np
-from torch.nn import functional
 from tabulate import tabulate
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

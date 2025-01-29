@@ -1,4 +1,5 @@
 import torch
+from scipy.stats import chi2
 from sklearn.mixture import GaussianMixture
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -19,6 +20,9 @@ class GM:
         self.tol = tol
         self.gmm = None
         self.K = None
+        self.centroids = None
+        self.covariances = None
+        self.confidence_regions = None
 
     def avg_gradient_change(self, values, current_index, window_size):
         gradients = [(values[i] - values[i-1]) / abs(values[i-1]) if values[i-1] != 0 else 0
@@ -59,14 +63,11 @@ class GM:
             ll.append(self.gmm.score(data) * len(data))
 
             if index >= window_size:
-                # Calculate the average gradient change for AIC, BIC, and log likelihood
                 aic_avg_grad = self.avg_gradient_change(aics, index, window_size)
                 bic_avg_grad = self.avg_gradient_change(bics, index, window_size)
-                ll_avg_grad = self.avg_gradient_change(ll, index, window_size)
-
-                # Check if the average changes exceed the threshold
-                if (aic_avg_grad < dgrad or bic_avg_grad < dgrad or ll_avg_grad < dgrad):
-                    optimal_k = k_values[index - window_size // 2]  # Choosing the middle of the window
+                
+                if (aic_avg_grad < dgrad or bic_avg_grad < dgrad):
+                    optimal_k = k_values[index - window_size // 2]  # Middle of  window
                     break 
 
         return optimal_k, {
@@ -75,29 +76,33 @@ class GM:
             'log_likelihood_values': ll
         }
 
-    def fit(self, X: torch.tensor, k_max: int, dgrad: float = 70):
+    def fit(self, X: torch.tensor, k: int, optimise = False, dgrad: float = None,):
         """
         Fits the Gaussian Mixture Model to the given data.
 
         ## Parameters:
         - X: torch.tensor, shape (n_samples, n_features)
             The input data.
-        - k_max: int
-            The maximum number of clusters to consider.
+        - k: int
+            In optimisation mode -> The maximum number of clusters to consider.
+            In standard mode -> The number of clusters to fit.
         - dgrad: float, optional (default=70)
             The gradient threshold for determining the optimal number of clusters.
 
         ## Returns:
         None
         """
-        optimal, dict_ = self.find_optimal_clusters(X, dgrad, k_max)
-        self.K = optimal
-
-        self.gmm = GaussianMixture(n_components=self.K, covariance_type='full', max_iter=self.max_iter, tol=self.tol, init_params='kmeans')
-        self.gmm.fit(X)
-
-        return dict_
-
+        if optimise:
+            optimal, dict_ = self.find_optimal_clusters(X, dgrad, k)
+            self.K = optimal
+            self.gmm = GaussianMixture(n_components=self.K, covariance_type='full', max_iter=self.max_iter, tol=self.tol, init_params='kmeans')
+            self.gmm.fit(X)
+            return dict_
+        else:
+            self.K = k
+            self.gmm = GaussianMixture(n_components=self.K, covariance_type='full', max_iter=self.max_iter, tol=self.tol, init_params='kmeans')
+            self.gmm.fit(X)
+        
     def sample(self, n_samples: int):
         """
         Generates samples from the fitted Gaussian Mixture Model.
@@ -124,7 +129,7 @@ class GM:
         - z_nk: array-like, shape (n_samples, K)
             The posterior probabilities of each sample belonging to each component.
         """
-        return self.gmm.predict_proba(X)    
+        return self.gmm.predict_proba(X)
     
     
 

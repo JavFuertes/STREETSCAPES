@@ -1,4 +1,7 @@
+import folium
 import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -63,5 +66,82 @@ def gm_elbo(aic_values: list, bic_values: list, log_likelihood_values: list):
     fig.update_layout(height=600, width=1200, title_text='GMM Model Criteria per Number of Clusters', showlegend=True)
 
     fig.show()
+
+def plot_feature_classes_responsibilities(latitude: np.array, longitude: np.array, responsibilities: np.array) -> folium.Map:
+    """
+    Creates a folium map with circle markers representing the feature classification based on responsibilities.
+
+    Parameters:
+    latitude (numpy.ndarray): Array of latitude values.
+    longitude (numpy.ndarray): Array of longitude values.
+    responsibilities (numpy.ndarray): Matrix of shape (n_points, n_clusters) representing the cluster responsibilities.
+
+    Returns:
+    folium.Map: Folium map object with circle markers representing the feature classification.
+    """
+    m = folium.Map(location=[latitude.mean(), longitude.mean()], zoom_start=15)
+
+    folium.TileLayer('Esri.WorldImagery').add_to(m)
+    n_clusters = responsibilities.shape[1]
+
+    colors = plt.get_cmap('viridis', n_clusters)
+    for lat, lon, resp in zip(latitude, longitude, responsibilities):
+        r, g, b, a = 0, 0, 0, 0
+        for i in range(n_clusters):
+            rgba = colors(i)  # Get RGBA values for the cluster
+            # Weight each color component by the responsibility
+            r += rgba[0] * resp[i]
+            g += rgba[1] * resp[i]
+            b += rgba[2] * resp[i]
+            a += resp[i] / n_clusters  # Average out the alpha to prevent saturation
+
+        a = min(max(a, 0), 1)    
+        final_color = matplotlib.colors.to_hex([r, g, b, a])
+        
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=5,
+            color=final_color,
+            fill=True,
+            fill_color=final_color,
+            popup=f'Responsibilities: {resp}',
+            fill_opacity=a
+        ).add_to(m)
+
+    return m
+
+def plot_feature_classes_kmeans(latitude: np.array, longitude: np.array, cluster_labels: np.array) -> folium.Map:
+    """
+    Creates a folium map with circle markers representing the feature classification based on KMeans clustering.
+
+    Parameters:
+    latitude (numpy.ndarray): Array of latitude values.
+    longitude (numpy.ndarray): Array of longitude values.
+    cluster_labels (numpy.ndarray): Array of cluster labels for each point.
+
+    Returns:
+    folium.Map: Folium map object with circle markers representing the feature classification.
+    """
+    m = folium.Map(location=[latitude.mean(), longitude.mean()], zoom_start=15)
+
+    folium.TileLayer('Esri.WorldImagery').add_to(m)
+    n_clusters = len(np.unique(cluster_labels))
+
+    colors = plt.get_cmap('viridis', n_clusters)
+    for lat, lon, label in zip(latitude, longitude, cluster_labels):
+        rgba = colors(label % n_clusters)  # Get RGBA values for the cluster
+        
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=5,
+            color=matplotlib.colors.to_hex(rgba[:3]),  # Use RGB for color
+            fill=True,
+            fill_color=matplotlib.colors.to_hex(rgba[:3]),
+            popup=f'Cluster: {label}',
+            fill_opacity=0.6
+        ).add_to(m)
+
+    return m
+
 
 
