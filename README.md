@@ -6,8 +6,8 @@ Streets are classified based on their role in vehicle movement (Su et al., 2022)
 > The primary objective of this project is to create a deep learning model that can automatically classify street typologies by analyzing computer vision embeddings. This aims to be solved via unsupervised and transfer learning, this approach allows to not rely on labeled data. Making the model simpler and transferable.
  
 | ![Google Streetview example image](./_data/src/image_10872_f.png) | ![Demo Classification results](./_data/processed/batch_demo.png)|
-|-------------------------------------------------------------------|------------------------------------------------------------------|
-| **Figure 1:** Building damage due to subsidence effects           | **Figure 2:** Building damage due to subsidence effects          |
+|-------------------------------------------------------------------|-----------------------------------------------------------------|
+| **Figure 1:** Streeview panoid image example                      | **Figure 2:** Street analysis classification example            |
 
 ## 📊 Results
 
